@@ -21,7 +21,7 @@ def handle(client):
                         response = "HTTP/1.1 200 OK\r\n\r\n"
                     elif path.startswith("/echo/"):
                         value = path.split("/echo/")[1]
-                        response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(value)}\r\n\r\n{value}".encode()
+                        response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(value)}\r\n\r\n{value}"
                     else:
                         response = "HTTP/1.1 404 Not Found\r\n\r\n"
                 else:
