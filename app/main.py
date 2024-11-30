@@ -22,6 +22,13 @@ def handle(client):
                     elif path.startswith("/echo/"):
                         value = path.split("/echo/")[1]
                         response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(value)}\r\n\r\n{value}"
+                    elif path.startswith("/user-agent"):
+                        user_agent = "Unknown"  # Default if the header is not found
+                        for header in lines[1:]:  # Start from the second line (headers begin after the request line)
+                            if header.lower().startswith("user-agent:"):
+                                user_agent = header.split(": ", 1)[1]
+                                break
+                        response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(user_agent)}\r\n\r\n{user_agent}"
                     else:
                         response = "HTTP/1.1 404 Not Found\r\n\r\n"
                 else:
