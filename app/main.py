@@ -1,4 +1,5 @@
 import socket  # noqa: F401
+import threading
 
 def handle(client):
     try:
@@ -52,7 +53,7 @@ def main():
             server_socket.listen()
             client, addr = server_socket.accept()
             print(f"Connection from {addr} has been established")
-            handle(client)
+            threading.Thread(target=handle, args=(client, addr), daemon=True).start()
     except KeyboardInterrupt:
         print("Shutting down server")
     finally:
