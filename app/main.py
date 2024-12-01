@@ -1,8 +1,9 @@
 import socket  # noqa: F401
 import threading
 
-def handle(client):
+def handle(client,addr):
     try:
+        print(f"Handling client {addr}")
         data = client.recv(1024).decode("utf-8")
         print(f"Received data:\n{data}")
 
