@@ -2,6 +2,7 @@ import socket
 from threading import Thread
 import argparse
 from pathlib import Path
+import gzip
 
 RN = b'\r\n'
 
@@ -26,14 +27,13 @@ def parse_request(conn):
             if ind == -1:
                 rest = data
                 continue
-            # GET URL HTTP
             line = data[:ind].decode()
             data = data[ind + 2:]
             d['request'] = line
             l = line.split()
-            d['method'] = l[0]  # GET, POST
+            d['method'] = l[0]
             d['url'] = l[1]
-            target = 1  # headers
+            target = 1
 
         if target == 1:
             if not data:
@@ -43,7 +43,7 @@ def parse_request(conn):
                 if ind == -1:
                     rest = data
                     break
-                if ind == 0:  # \r\n\r\n
+                if ind == 0:
                     data = data[ind + 2:]
                     target = 2
                     break
@@ -81,45 +81,23 @@ def req_handler(conn, dir_):
         url = d['url']
         method = d['method']
         headers = d['headers']
-        if url == '/':
-            conn.sendall(b"HTTP/1.1 200 OK\r\n\r\n")
-        elif url.startswith('/echo/'):
+
+        if url.startswith('/echo/'):
             body = url[6:].encode()
             conn.send(b'HTTP/1.1 200 OK\r\n')
             conn.send(b'Content-Type: text/plain\r\n')
             if encoding := headers.get('accept-encoding', None):
-                l = encoding.split(', ')
-                if 'gzip' in l:
+                encodings = [e.strip() for e in encoding.split(',')]
+                if 'gzip' in encodings:
+                    compressed_body = gzip.compress(body)
                     conn.send(b'Content-Encoding: gzip\r\n')
-            conn.send(f'Content-Length: {len(body)}\r\n'.encode())
-            conn.send(RN)
-            conn.send(body)
-        elif url == '/user-agent':
-            body = headers['user-agent'].encode()
-            conn.send(b'HTTP/1.1 200 OK\r\n')
-            conn.send(b'Content-Type: text/plain\r\n')
-            conn.send(f'Content-Length: {len(body)}\r\n'.encode())
-            conn.send(RN)
-            conn.send(body)
-        elif url.startswith('/files/'):
-            file = Path(dir_) / url[7:]
-            if method == 'GET':
-                if file.exists():
-                    conn.send(b'HTTP/1.1 200 OK\r\n')
-                    conn.send(b'Content-Type: application/octet-stream\r\n')
-                    with open(file, 'rb') as fp:
-                        body = fp.read()
-                    conn.send(f'Content-Length: {len(body)}\r\n'.encode())
+                    conn.send(f'Content-Length: {len(compressed_body)}\r\n'.encode())
                     conn.send(RN)
-                    conn.send(body)
-                else:
-                    conn.sendall(b"HTTP/1.1 404 Not Found\r\n\r\n")
-            elif method == 'POST':
-                with open(file, 'wb') as fp:
-                    fp.write(d['body'])
-                conn.send(b'HTTP/1.1 201 Created\r\n\r\n')
-            else:
-                conn.sendall(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
+                    conn.send(compressed_body)
+                    return
+            conn.send(f'Content-Length: {len(body)}\r\n'.encode())
+            conn.send(RN)
+            conn.send(body)
         else:
             conn.sendall(b"HTTP/1.1 404 Not Found\r\n\r\n")
 
@@ -133,7 +111,7 @@ def main():
     print("Server started on localhost:4221")
     while True:
         try:
-            conn, _ = server_socket.accept()  # wait for client
+            conn, _ = server_socket.accept()
             Thread(target=req_handler, args=(conn, args.directory)).start()
         except KeyboardInterrupt:
             print("\nServer shutting down...")
