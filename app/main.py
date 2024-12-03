@@ -81,15 +81,15 @@ def req_handler(conn, dir_):
         url = d['url']
         method = d['method']
         headers = d['headers']
-
-        if url.startswith('/echo/'):
+        if url == '/':
+            conn.sendall(b"HTTP/1.1 200 OK\r\n\r\n")
+        elif url.startswith('/echo/'):
             body = url[6:].encode()
             conn.send(b'HTTP/1.1 200 OK\r\n')
             conn.send(b'Content-Type: text/plain\r\n')
-            # Check for Accept-Encoding header
             if encoding := headers.get('accept-encoding', None):
-                encodings = [e.strip() for e in encoding.split(',')]
-                if 'gzip' in encodings:  # Support only gzip
+                l = encoding.split(', ')
+                if 'gzip' in l:
                     conn.send(b'Content-Encoding: gzip\r\n')
             conn.send(f'Content-Length: {len(body)}\r\n'.encode())
             conn.send(RN)
