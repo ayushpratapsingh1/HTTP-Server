@@ -21,13 +21,14 @@ def main():
             method = request_line[0]
             path = request_line[1]
 
-            # Extract headers
+            # Extract headers and body
             headers = {line.split(": ")[0]: line.split(": ")[1] for line in req[1:] if ": " in line}
-            accept_encoding = headers.get("Accept-Encoding", "")
+            body = req[-1] if req[-1] else ""
 
             if method == "GET":
                 if path.startswith('/echo/'):
                     response_body = path[6:]  # Extract the data after '/echo/'
+                    accept_encoding = headers.get("Accept-Encoding", "")
                     if "gzip" in accept_encoding:
                         compressed_body = gzip_compress(response_body)
                         response = (
@@ -46,6 +47,25 @@ def main():
                 else:
                     response = "HTTP/1.1 404 Not Found\r\n\r\nInvalid path".encode()
                 client.send(response)
+
+            elif method == "POST":
+                if path.startswith("/files/"):
+                    # Extract file name from the path
+                    directory = sys.argv[2] if len(sys.argv) > 2 else "."
+                    filename = path[7:]
+
+                    # Write the body content to the file
+                    try:
+                        file_path = os.path.join(directory, filename)
+                        with open(file_path, "w") as f:
+                            f.write(body)
+                        response = "HTTP/1.1 201 Created\r\n\r\n".encode()
+                    except Exception as e:
+                        response = f"HTTP/1.1 500 Internal Server Error\r\n\r\n{str(e)}".encode()
+                else:
+                    response = "HTTP/1.1 404 Not Found\r\n\r\nInvalid path".encode()
+                client.send(response)
+
             else:
                 response = "HTTP/1.1 405 Method Not Allowed\r\n\r\n".encode()
                 client.send(response)
