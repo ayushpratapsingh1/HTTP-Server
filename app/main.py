@@ -2,6 +2,12 @@ import socket
 import threading
 import sys
 import os
+import gzip
+
+def gzip_compress(data):
+    """Compress data using gzip."""
+    compressed_data = gzip.compress(data.encode())
+    return compressed_data
 
 def main():
     def handle_req(client, addr):
@@ -15,44 +21,31 @@ def main():
             method = request_line[0]
             path = request_line[1]
 
+            # Extract headers
+            headers = {line.split(": ")[0]: line.split(": ")[1] for line in req[1:] if ": " in line}
+            accept_encoding = headers.get("Accept-Encoding", "")
+
             if method == "GET":
-                if path == "/":
-                    response = "HTTP/1.1 200 OK\r\n\r\n".encode()
-                elif path.startswith('/echo'):
-                    response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(path[6:])}\r\n\r\n{path[6:]}".encode()
-                elif path.startswith("/user-agent"):
-                    # Find User-Agent header
-                    user_agent = next((header.split(": ")[1] for header in req if header.startswith("User-Agent:")), "Unknown")
-                    response = f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len(user_agent)}\r\n\r\n{user_agent}".encode()
-                elif path.startswith("/files"):
-                    directory = sys.argv[2] if len(sys.argv) > 2 else "."
-                    filename = path[7:]
-                    file_path = os.path.join(directory, filename)
-                    try:
-                        with open(file_path, "r") as f:
-                            body = f.read()
-                        response = f"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {len(body)}\r\n\r\n{body}".encode()
-                    except FileNotFoundError:
-                        response = "HTTP/1.1 404 Not Found\r\n\r\nFile not found".encode()
-                    except Exception as e:
-                        response = f"HTTP/1.1 500 Internal Server Error\r\n\r\n{str(e)}".encode()
+                if path.startswith('/echo/'):
+                    response_body = path[6:]  # Extract the data after '/echo/'
+                    if "gzip" in accept_encoding:
+                        compressed_body = gzip_compress(response_body)
+                        response = (
+                            f"HTTP/1.1 200 OK\r\n"
+                            f"Content-Type: text/plain\r\n"
+                            f"Content-Encoding: gzip\r\n"
+                            f"Content-Length: {len(compressed_body)}\r\n\r\n"
+                        ).encode() + compressed_body
+                    else:
+                        response = (
+                            f"HTTP/1.1 200 OK\r\n"
+                            f"Content-Type: text/plain\r\n"
+                            f"Content-Length: {len(response_body)}\r\n\r\n"
+                            f"{response_body}"
+                        ).encode()
                 else:
                     response = "HTTP/1.1 404 Not Found\r\n\r\nInvalid path".encode()
                 client.send(response)
-
-            elif method == "POST":
-                if path.startswith("/files"):
-                    directory = sys.argv[2] if len(sys.argv) > 2 else "."
-                    filename = path[7:]
-                    body = data.split("\r\n\r\n", 1)[-1]  # Extract the body after headers
-                    file_path = os.path.join(directory, filename)
-                    try:
-                        with open(file_path, "w") as f:
-                            f.write(body)
-                        response = "HTTP/1.1 201 Created\r\n\r\nFile created successfully".encode()
-                    except Exception as e:
-                        response = f"HTTP/1.1 500 Internal Server Error\r\n\r\n{str(e)}".encode()
-                    client.send(response)
             else:
                 response = "HTTP/1.1 405 Method Not Allowed\r\n\r\n".encode()
                 client.send(response)
